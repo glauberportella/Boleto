@@ -4,7 +4,7 @@
  * Boleto output.
  *
  * You will also need to install at least one bank plugin for this to work.
- * 
+ *
  * @mainpage Boleto Libray - Main Class.
  * @author Francisco Luz <franciscoferreiraluz@yahoo.com.au>
  * @package BoletoLibraryPHP
@@ -24,11 +24,11 @@ abstract class Boleto {
    * Image folder location.
    */
   const IMAGES_FOLDER = '/imagens/';
-  
+
   /**
    * The FEBRABAN base date for calculating the "due on" field value.
    */
-  const DUEON_BASE_DATE = '07-10-1997';
+  const DUEON_BASE_DATE = '1997-10-07';
 
   /**
    * Issuer bank code.
@@ -49,6 +49,12 @@ abstract class Boleto {
    * Hold warnings issued by the library itself and the bank issuer plugins.
    */
   protected $warnings = array();
+
+  protected $date_fields = array(
+    'data_vencimento',
+    'data_documento',
+    'data_processamento',
+  );
 
   /**
    * General settings.
@@ -102,9 +108,9 @@ abstract class Boleto {
     'instrucoes2' => '',
     'instrucoes3' => '',
     'instrucoes4' => '',
-    'data_documento' => '',
-    'data_vencimento' => '',
-    'data_processamento' => '',
+    'data_documento' => '', // input as YYYY-MM-DD
+    'data_vencimento' => '', // input as YYYY-MM-DD
+    'data_processamento' => '', // input as YYYY-MM-DD
     'carteira' => 'SR',
     'title' => '',
     'local_pagamento' => 'Pag&aacute;vel em qualquer Banco at&eacute; o vencimento',
@@ -155,7 +161,7 @@ abstract class Boleto {
     // Campo Livre. Set by child class (issuer bank implementation).
     '20-44' => '',
   );
-  
+
   protected $startUp = array(
     'settings',
     'data_vencimento',
@@ -164,14 +170,14 @@ abstract class Boleto {
     'febraban',
     'linha_digitavel',
     // Generate bar code strips.
-    'barcode', 
+    'barcode',
   );
 
   /**
    * @see the method output().
    */
   protected $output = array();
-  
+
   /**
    * This is the method that the library consumer must call statically.
    * It first checks if there is an plugin implementation for the desired bank.
@@ -201,18 +207,21 @@ abstract class Boleto {
       return "The plugin for the bank code $bank_code is not installed.";
     }
   }
-  
+
   protected function __construct($arguments){
-    $this->arguments['data_documento']   = date('d-m-Y');
+    $this->arguments['data_documento']   = date('d/m/Y');
     $this->arguments['data_processamento'] = $this->arguments['data_documento'];
-    
+
     // Assign the arguments sent through.
     foreach($arguments as $argument => $value){
+      /*if (in_array($argument, $this->date_fields)) {
+        $value = (new \DateTime($value))->format('d/m/Y');
+      }*/
       $this->arguments[$argument] = $value;
     }
     // Set default html head title.
     if (!isset($arguments['title'])){
-      $this->arguments['title'] = $this->arguments['cedente'];   
+      $this->arguments['title'] = $this->arguments['cedente'];
     }
     $this->bank_code = trim($arguments['bank_code']);
 
@@ -239,7 +248,7 @@ abstract class Boleto {
       //  Pega cada numero isoladamente.
       $numeros[$i] = substr($num,$i-1,1);
       //  Efetua multiplicacao do numero pelo (falor 10).
-      $temp = $numeros[$i] * $fator; 
+      $temp = $numeros[$i] * $fator;
       $temp0=0;
       foreach (preg_split('// ',$temp,-1,PREG_SPLIT_NO_EMPTY) as $k=>$v){ $temp0+=$v; }
       $parcial10[$i] = $temp0; // $numeros[$i] * $fator;
@@ -300,7 +309,7 @@ abstract class Boleto {
       'resto'  => $soma % 11,
     );
     if ($result['digito'] == 10){
-      $result['digito'] = 0;   
+      $result['digito'] = 0;
     }
     return $result;
   }
@@ -312,17 +321,18 @@ abstract class Boleto {
    *   An Integer Number which defines the number of days to be added on top of
    *   issuing date.
    *   A date formated as dd-mm-yyy.
-   *               
+   *
    * If argument is empty then it adds 5 days on top of issuing date as default.
    */
   protected function data_vencimento(){
     // Set defaults.
     // Making sure we got a dash "-" instead of forward slah "/" for vencimento.
+    // input data_vencimento as YYYY-MM-DD
     $this->computed['data_vencimento'] = str_replace('/','-', $this->arguments['data_vencimento']);
     // Adds 5 days on top of issuing date.
     $vencimento = '+5';
-    $vencimento_value = date('d-m-Y', strtotime($vencimento.' days'));
-    
+    $vencimento_value = date('d/m/Y', strtotime($vencimento.' days'));
+
     // Check if an argument for vencimento has been set.
     if (!empty($this->arguments['data_vencimento'])){
       if (is_numeric($this->arguments['data_vencimento'])){
@@ -333,17 +343,19 @@ abstract class Boleto {
         else {
           // For any other integer.
           $vencimento = '+' . $this->arguments['data_vencimento'];
-          $vencimento_value = date('d-m-Y', strtotime($vencimento . ' days'));
+          $vencimento_value = date('d/m/Y', strtotime($vencimento . ' days'));
         }
       }
       else {
         // An actual date was sent through.
         $vencimento_value =  $this->computed['data_vencimento'];
-        // Check if date is in a valide format.
+        // Check if date is in a valide format. Remember date was input as YYYY-MM-DD
         $date_check = explode('-', $vencimento_value);
-        if (!checkdate($date_check[1], $date_check[0], $date_check[2])){
-          $this->setWarning(array('data_vencimento', 'Invalido. Certifique-se que tenha informado ou -1 ou um numero inteiro ou uma data no formato dd-mm-yyyy.<br>'));
-        }        
+        if (!checkdate($date_check[1], $date_check[2], $date_check[0])){
+          $this->setWarning(array('data_vencimento', 'Invalido. Certifique-se que tenha informado ou -1 ou um numero inteiro ou uma data no formato aaaa-mm-dd.<br>'));
+        } else {
+          $vencimento_value = date('d/m/Y', mktime(0, 0, 0, $date_check[1], $date_check[2], $date_check[0]));
+        }
       }
     }
     $this->computed['data_vencimento']  = $vencimento_value;
@@ -352,24 +364,25 @@ abstract class Boleto {
   /**
    * Calculates the "Due date" 4 digits factor number.
    * It is the positions from 6 to 9 in the Febraban array.
-   * 
+   *
    * Script from http:// phpbrasil.com/articles/print.php/id/1034 .
    */
   protected function fator_vencimento(){
-    $from = self::DUEON_BASE_DATE;
-    $to   = $this->computed['data_vencimento'];
-    
+    $from = self::DUEON_BASE_DATE; // it is YYYY-MM-DD
+    $to   = $this->computed['data_vencimento']; // it is 'dd/mm/yyyy'
+
     if ($this->arguments['data_vencimento'] == -1){
       // "Due Date" is Cash against document.
       $days = '0000';
     }
     else {
-      // Usar DD-MM-AA ou DD-MM-AAAA.
-      list($from_day, $from_month, $from_year) = explode("-", $from); 
-      list($to_day, $to_month, $to_year) = explode("-", $to); 
-      $from_date = mktime(0, 0, 0, $from_month, $from_day, $from_year); 
+      // Usar YY-MM-DD ou YYYY-MM-DD
+      list($from_year, $from_month, $from_day) = explode("-", $from);
+      // $to is already calculated as dd/mm/yyyy
+      list($to_day, $to_month, $to_year) = explode("/", $to);
+      $from_date = mktime(0, 0, 0, $from_month, $from_day, $from_year);
       $to_date = mktime(0, 0, 0, $to_month, $to_day, $to_year);
-      
+
       $days = round(($to_date - $from_date) / 86400);
     }
     // Assign value to febraban array property.
@@ -387,13 +400,13 @@ abstract class Boleto {
       //  Set codigo_banco_com_dv.
       $bank_code_checkDigit = $this->modulo_11($this->bank_code);
       $this->computed['codigo_banco_com_dv'] = $this->bank_code . '-' . $bank_code_checkDigit['digito'];
-      
+
     }
   }
 
   /**
    * Calculates and constructs the FEBRABAN specification.
-   * 
+   *
    * 01-03 (3)  -> Código do banco sem o digito
    * 04-04 (1)  -> Código da Moeda (9-Real)
    * 05-05 (1)  -> Dígito verificador do código de barras
@@ -410,7 +423,7 @@ abstract class Boleto {
     $this->febraban['1-3'] = $this->bank_code;
     // Position 4 has a pre set value of 9.
     // Positions 6-9 is done at fator_vencimento().
-    
+
     // Remove decimal separator from valor_cobrado.
     $vc   = str_replace('.','', $this->computed['valor_cobrado']);
     // Positions 10 to 19.
@@ -425,7 +438,7 @@ abstract class Boleto {
     $check_digit = '';
     foreach($this->febraban as $key => $value){
       if ($key != '5-5') {
-        $check_digit .= $value; 
+        $check_digit .= $value;
       }
     }
 
@@ -436,7 +449,7 @@ abstract class Boleto {
     }
     else {
       $check_digit['digito'] = 11 - $remainder;
-    }    
+    }
     // Position 5 (check digit for the whole set).
     $this->febraban['5-5'] = $check_digit['digito'];
 
@@ -502,12 +515,12 @@ abstract class Boleto {
 
     // Now put everything together.
     $this->computed['linha_digitavel'] = "$part1 $part2 $part3 $cd $part4";
-     
+
     // Now validates the human readable number.
     $lengh = strlen($this->computed['linha_digitavel']);
     if ($lengh != 54){
-      $lengh -= 7; 
-      $this->setWarning(array("linha_digitavel", "possui $lengh digitos enquanto deveria ter 47.")); 
+      $lengh -= 7;
+      $this->setWarning(array("linha_digitavel", "possui $lengh digitos enquanto deveria ter 47."));
     }
   }
 
@@ -528,7 +541,7 @@ abstract class Boleto {
     }
 
     $this->bank_name = 'O plugin desde banco não informou o nome do banco. Entre em contato com o administrador do plugin.';
-  
+
     // Calculate valor_cobrado (total amount).
     $subtractions = $this->arguments['desconto_abatimento'] + $this->arguments['outras_deducoes'];
     $additions  = $this->arguments['mora_multa'] + $this->arguments['outros_acrescimos'];
@@ -538,7 +551,7 @@ abstract class Boleto {
     $this->arguments['valor_boleto'] = number_format((float)$this->arguments['valor_boleto'], 2, '.', '');
     // format valor_cobrado.
     $this->computed['valor_cobrado'] = number_format($this->computed['valor_cobrado'], 2, '.', '');
-    
+
     // Check some basic settings.
     if (method_exists($this, 'setUp')){
       // Check if these files exists.
@@ -565,7 +578,7 @@ abstract class Boleto {
 
       foreach($files as $key => $value){
         $filename = $value['#file_name'];
-        
+
         if (@file_exists($true_path. DIRECTORY_SEPARATOR . $filename)){
           if ($key == 'template'){
             $this->settings[$key] = $true_path . DIRECTORY_SEPARATOR . $filename;
@@ -573,7 +586,7 @@ abstract class Boleto {
           else {
             $this->settings[$key] = $location . DIRECTORY_SEPARATOR . $filename;
           }
-          
+
         }
         elseif ($value['#required']){
           // set warning.
@@ -600,31 +613,31 @@ abstract class Boleto {
     foreach($this->febraban as $value){
       $code .= $value;
     }
-    
+
     // Get bar code values from settings.
     $barcodes = array('00110', '10001', '01001', '11000', '00101', '10100', '01100', '00011', '10010', '01010');
 
     // Apply bar codes to the febraban code.
-    for($f1 = 9; $f1 >= 0; $f1--){ 
-      for($f2 = 9; $f2 >= 0; $f2--){  
+    for($f1 = 9; $f1 >= 0; $f1--){
+      for($f2 = 9; $f2 >= 0; $f2--){
         $f = ($f1 * 10) + $f2 ;
         $texto = '';
-        for($i = 1; $i < 6; $i++){ 
+        for($i = 1; $i < 6; $i++){
           $texto .=  substr($barcodes[$f1], ($i - 1), 1) . substr($barcodes[$f2], ($i - 1), 1);
         }
         $barcodes[$f] = $texto;
       }
-    }    
+    }
     // Get bar width from settings.
     $thinner = $this->settings['bar_code']['fino'];
     $thicker = $this->settings['bar_code']['largo'];
     // Get bar height.
     $height = $this->settings['bar_code']['altura'];
-    
+
     // Get the black and white bar images.
     $black = $this->settings['file_location'] . self::IMAGES_FOLDER . $this->settings['bar_code']['black_bar'];
     $white = $this->settings['file_location'] . self::IMAGES_FOLDER . $this->settings['bar_code']['white_bar'];
-    
+
     // Create a sequence of black and white strips.
     $total = $this->settings['bar_code']['#_strips'];
     for($i = 0; $i <= $total; $i++){
@@ -637,11 +650,11 @@ abstract class Boleto {
         $img_strips[] = $black;
       }
     }
-    
+
     // Set strip widths.
     // Start code bit.
-    $img_widths = array($thinner, $thinner, $thinner, $thinner);    
-    
+    $img_widths = array($thinner, $thinner, $thinner, $thinner);
+
     // Main code.
     if ((strlen($code) % 2) <> 0){
       $code = "0" . $code;
@@ -658,7 +671,7 @@ abstract class Boleto {
           $f1 = $thicker ;
         }
         $img_widths[] = $f1;
-    
+
         if (substr($f, $i, 1) == "0") {
           $f2 = $thinner;
         }
@@ -682,7 +695,7 @@ abstract class Boleto {
       if (isset($img_strips[$key])) {
         $img = $img_strips[$key];
         $this->computed['bar_code']['strips'] .= "<img src=$img width=$width height=$height border=0>";
-        
+
         // Strip widths for debug checking.
         $this->computed['bar_code']['widths'] .=  $width;
       }
@@ -691,7 +704,7 @@ abstract class Boleto {
 
   /**
    * Helper function for barcode().
-   * 
+   *
    * @param String $entra
    *  TODO: Document this.
    * @param String $comp
@@ -740,13 +753,13 @@ abstract class Boleto {
       'demonstrativo2' => $this->arguments['demonstrativo2'],
       'demonstrativo3' => $this->arguments['demonstrativo3'],
       'local_pagamento' => $this->arguments['local_pagamento'],
-      'data_documento' => $this->arguments['data_documento'],
+      'data_documento' => (new \DateTime($this->arguments['data_documento']))->format('d/m/Y'),
       'numero_documento' => $this->arguments['numero_documento'],
       'agencia_codigo_cedente'=> $this->arguments['agencia'] .' / ' . $this->arguments['conta'] . '-' . $this->arguments['conta_dv'],
       'nosso_numero' => $this->computed['nosso_numero'],
       'especie_doc' => $this->arguments['especie_doc'],
       'aceite' => $this->arguments['aceite'],
-      'data_processamento'  => $this->arguments['data_processamento'],
+      'data_processamento'  => (new \DateTime($this->arguments['data_processamento']))->format('d/m/Y'),
       'carteira' => $this->arguments['carteira'],
       'valor_unitario' => $this->arguments['valor_unitario'],
       'instrucoes1' => $this->arguments['instrucoes1'],
@@ -835,14 +848,14 @@ abstract class Boleto {
 
   /**
    * Setter for warnings property.
-   * 
+   *
    * @param Array $message
    *  The array key holds the field name and the array Value holds the Message
    *  to be set or unset.
    * @param Boolean $action
    *  Whether or not the current warning should be added to the warning
    *  parameter
-   */  
+   */
   public function setWarning($message, $action = TRUE){
     if ($action){
       $this->warnings[$message[0]][] = $message[1];
