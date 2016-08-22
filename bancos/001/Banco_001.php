@@ -15,7 +15,7 @@ class Banco_001 extends Boleto{
   function setUp(){
     $this->bank_name  = 'Banco do Brasil SA';
   }
-  
+
   /**
    * Implementation of Febraban free range set from position 20 to 44.
    */
@@ -27,12 +27,12 @@ class Banco_001 extends Boleto{
 
     // See readme.txt
     $cc = explode('-', $this->arguments['carteira_nosso_numero']);
-    
+
     $convenio = $this->computed['convenio'] = $cc[0];
     $contrato = $this->computed['contrato'] = '';
     $servico  = $this->computed['servico']  = '';
     if(isset($cc[1])){
-      $contrato = $this->computed['contrato'] = $cc[1]; 
+      $contrato = $this->computed['contrato'] = $cc[1];
     }
     if(isset($cc[2])){
       $servico = $this->computed['servico'] = $cc[2];
@@ -74,7 +74,7 @@ class Banco_001 extends Boleto{
 
             // 25 digits long
             $code  = $convenio.$nosso_numero.$carteira[0];
-           
+
             // No check digit for nosso_numero
             $checkDigit['digito'] = '';
             break;
@@ -85,7 +85,7 @@ class Banco_001 extends Boleto{
               // 43-44 -> Servico                     2
              $convenio   = str_pad($convenio, 6, 0, STR_PAD_LEFT);
              $nosso_numero = str_pad($this->arguments['nosso_numero'], 17, 0, STR_PAD_LEFT);
-             
+
              // 25 digits long code.
              $code  = $convenio . $nosso_numero.$servico;
             }
@@ -98,18 +98,56 @@ class Banco_001 extends Boleto{
               $convenio   = str_pad($convenio, 6, 0, STR_PAD_LEFT);
               $nosso_numero = str_pad($this->arguments['nosso_numero'], 5, 0, STR_PAD_LEFT);
               // 25 digits long.
-              $code  = $convenio . $nosso_numero . $this->arguments['agencia'] . $this->arguments['conta'] . $carteira[0];             
+              $code  = $convenio . $nosso_numero . $this->arguments['agencia'] . $this->arguments['conta'] . $carteira[0];
             }
             break;
         }
         break;
-        // TODO: Implement more carteiras
-        //       Documentation at
-        //       www.bb.com.br/docs/pub/emp/empl/dwn/Doc5175Bloqueto.pdf
+      case 17: case 11:
+        $conv_len   =  strlen($convenio);
+        switch ($conv_len) {
+          case 4:
+            // 20-23 -> Convenio                          4
+            // 24-30 -> Nosso Número (sem dígito)         7
+            // 31-34 -> Agencia (sem dígito)              4
+            // 35-42 -> Conta (sem dígito)                8
+            // 43-44 -> Tipo carteira/Modalidade cobrança 2
+            $convenio = str_pad($convenio, 4, 0, STR_PAD_LEFT);
+            $nosso_numero = str_pad($this->arguments['nosso_numero'], 7, 0, STR_PAD_LEFT);
+            // 25 digits long
+            $code = $convenio.$nosso_numero.$this->arguments['agencia'].$this->arguments['conta'].$carteira[0];
+            break;
+          case 6:
+            // 20-25 -> Convenio                          6
+            // 26-30 -> Nosso Número (sem dígito)         5
+            // 31-34 -> Agencia (sem dígito)              4
+            // 35-42 -> Conta (sem dígito)                8
+            // 43-44 -> Tipo carteira/Modalidade cobrança 2
+            $convenio = str_pad($convenio, 6, 0, STR_PAD_LEFT);
+            $nosso_numero = str_pad($this->arguments['nosso_numero'], 5, 0, STR_PAD_LEFT);
+            // 25 digits long
+            $code = $convenio.$nosso_numero.$this->arguments['agencia'].$this->arguments['conta'].$carteira[0];
+            break;
+          case 7:
+            // 20-25 -> Zeros                             6
+            // 26-32 -> Convenio                          7
+            // 33-42 -> Nosso Número (sem dígito)         10
+            // 43-44 -> Tipo carteira/Modalidade cobrança 2
+            $zeros = '000000';
+            $convenio = str_pad($convenio, 7, 0, STR_PAD_LEFT);
+            $nosso_numero = str_pad($this->arguments['nosso_numero'], 10, 0, STR_PAD_LEFT);
+            // 25 digits long
+            $code = $zeros.$convenio.$nosso_numero.$this->arguments['agencia'].$this->arguments['conta'].$carteira[0];
+            break;
+        }
+        break;
+      // TODO: Implement more carteiras
+      //       Documentation at
+      //       www.bb.com.br/docs/pub/emp/empl/dwn/Doc5175Bloqueto.pdf
     }
     // Positions 20 to 44.
     $this->febraban['20-44'] = $code;
-     
+
     // Save nosso_numero.
     $this->computed['nosso_numero'] = ltrim($convenio, 0) . $nosso_numero.$checkDigit['digito'];
   }
@@ -133,7 +171,7 @@ class Banco_001 extends Boleto{
   function outputValues(){
     $this->output['agencia_codigo_cedente'] = $this->arguments['agencia'] . '-' .
     $this->computed['agencia_dv'] . ' / ' . $this->arguments['conta'] . '-' . $this->arguments['conta_dv'];
-    
+
     $this->output['contrato'] = $this->computed['contrato'];
   }
 }
